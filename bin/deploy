@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""
+Build & deploy our Hello, World application.
+"""
+
+import argparse
+import os
+import os.path as path
+import shutil
+import subprocess
+import sys
+
+
+ROOT = path.abspath(path.dirname(path.dirname(__file__)))
+BUILD = path.join(ROOT, 'build')
+ENVS = (
+    'prod',
+    'local',
+)
+
+
+def run(*cmd, env=None, cwd=None, **kwargs):
+    _env = os.environ.copy()
+    if env is not None:
+        _env.update(env)
+    return subprocess.run(cmd, stdout=sys.stdout, stderr=subprocess.STDOUT,
+            check=True, cwd=cwd or ROOT, env=_env, **kwargs)
+
+
+def parse_args(args=None):
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('-l', '--local-tag', dest='localtag', default='dockerterraform',
+            help='The tag for the local docker build')
+    p.add_argument('environment', choices=ENVS,
+            help='The environment to which the container will be deployed. Local only builds the container')
+    return p.parse_args()
+
+
+def clean_build():
+    shutil.rmtree(BUILD)
+    os.mkdir(BUILD)
+
+
+def build_binary(args):
+    env = {
+        'GOOS': os.environ.get('GOOS') or 'linux',
+        'GOARCH': os.environ.get('GOARCH') or 'amd64',
+    }
+    run('go', 'build', '-o', path.join(BUILD, 'app'), 'main.go', env=env)
+
+
+def build_container(args):
+    run('docker', 'build', '-t', args.localtag, '.')
+
+
+def main():
+    args = parse_args()
+    clean_build()
+    build_binary(args)
+    build_container(args)
+
+    if 'local' == args.environment:
+        print('docker run -p 9090:9090 {}'.format(args.localtag))
+        return
+
+
+if __name__ == '__main__':
+    main()
+

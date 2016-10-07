@@ -5,3 +5,7 @@ output "task_iam_role" {
 output "ecr_repository" {
     value = "${aws_ecr_repository.main.repository_url}"
 }
+
+output "log_group" {
+    value = "${var.app}-${var.env}"
+}

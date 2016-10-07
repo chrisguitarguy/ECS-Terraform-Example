@@ -16,3 +16,7 @@ output "task_role" {
 output "docker_repository" {
     value = "${module.app.ecr_repository}"
 }
+
+output "log_group" {
+    value = "${module.app.log_group}"
+}

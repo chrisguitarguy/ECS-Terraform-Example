@@ -9,6 +9,10 @@ module "app" {
     key_pair = "websites"
 }
 
-output "task_iam_role" {
+output "task_role" {
     value = "${module.app.task_iam_role}"
+}
+
+output "docker_repository" {
+    value = "${module.app.ecr_repository}"
 }

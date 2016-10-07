@@ -9,3 +9,11 @@ output "ecr_repository" {
 output "log_group" {
     value = "${var.app}-${var.env}"
 }
+
+output "loadbalancer_dns_name" {
+    value = "${aws_alb.main.dns_name}"
+}
+
+output "loadbalancer_dns_zone" {
+    value = "${aws_alb.main.zone_id}"
+}

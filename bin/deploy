@@ -4,11 +4,14 @@ Build & deploy our Hello, World application.
 """
 
 import argparse
+import base64
 import os
 import os.path as path
+import json
 import shutil
 import subprocess
 import sys
+import boto3 as aws
 
 
 ROOT = path.abspath(path.dirname(path.dirname(__file__)))
@@ -17,6 +20,10 @@ ENVS = (
     'prod',
     'local',
 )
+
+
+def _local_tag(args):
+    return '{}:{}'.format(args.localtag, args.version)
 
 
 def run(*cmd, env=None, cwd=None, **kwargs):
@@ -29,10 +36,12 @@ def run(*cmd, env=None, cwd=None, **kwargs):
 
 def parse_args(args=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('-l', '--local-tag', dest='localtag', default='dockerterraform',
+    p.add_argument('-l', '--local-tag', dest='localtag', default='ecsterraform',
             help='The tag for the local docker build')
     p.add_argument('environment', choices=ENVS,
             help='The environment to which the container will be deployed. Local only builds the container')
+    p.add_argument('version', default='latest', nargs='?',
+            help='The version of the application being built and deployed')
     return p.parse_args()
 
 
@@ -50,7 +59,28 @@ def build_binary(args):
 
 
 def build_container(args):
-    run('docker', 'build', '-t', args.localtag, '.')
+    run('docker', 'build', '-t', _local_tag(args), '.')
+
+
+def load_terraform_state(args):
+    state = subprocess.check_output(
+        ['terraform', 'output', '-json'],
+        cwd=path.join(ROOT, 'etc', 'terraform', args.environment),
+        stderr=sys.stderr,
+    )
+    result = json.loads(state.decode('utf-8'))
+
+    return {k: v['value'] for k, v in result.items()}
+
+
+def push_container(args, remote_tag):
+    ecr = aws.client('ecr')
+    auth = ecr.get_authorization_token().get('authorizationData', [])[0]
+    username, token = base64.b64decode(auth['authorizationToken']).decode('utf-8').split(':')
+    run('docker', 'login', '-u', username, '-p', token, auth['proxyEndpoint'])
+
+    run('docker', 'tag', _local_tag(args), remote_tag)
+    run('docker', 'push', remote_tag)
 
 
 def main():
@@ -63,7 +93,36 @@ def main():
         print('docker run -p 9090:9090 {}'.format(args.localtag))
         return
 
+    state = load_terraform_state(args)
+    repo = state['docker_repository'].replace('https://', '')
+    remote_tag = '{}:{}'.format(repo, args.version)
+    push_container(args, remote_tag)
+
+    ecs = aws.client('ecs')
+    ecs.register_task_definition(
+        family='ecsterraform',
+        taskRoleArn=state['task_role'],
+        networkMode='bridge',
+        containerDefinitions=[{
+            'name': 'main',
+            'essential': True,
+            'image': remote_tag,
+            'cpu': 128,
+            'memory': 128,
+            'portMappings': [
+                {'containerPort': 9090}
+            ],
+            'logConfiguration': {
+                'logDriver': 'awslogs',
+                'options': {
+                    'awslogs-group': state['log_group'],
+                    'awslogs-region': 'us-east-1',
+                    'awslogs-stream-prefix': 'ecsterraform',
+                },
+            },
+        }],
+    )
+
 
 if __name__ == '__main__':
     main()
-

@@ -7,6 +7,7 @@ RUN wget https://github.com/Yelp/dumb-init/releases/download/v1.1.3/dumb-init_1.
 RUN dpkg -i dumb-init_*.deb
 ADD build/app /usr/local/bin/app
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+EXPOSE 9090
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["/usr/local/bin/app"]

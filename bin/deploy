@@ -46,7 +46,7 @@ def parse_args(args=None):
 
 
 def clean_build():
-    shutil.rmtree(BUILD)
+    shutil.rmtree(BUILD, ignore_errors=True)
     os.mkdir(BUILD)
 
 
